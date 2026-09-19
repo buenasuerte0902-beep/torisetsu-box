@@ -11,6 +11,7 @@ const els = {};
  "detail-overlay", "detail-name", "detail-edit-btn", "detail-delete-btn",
  "detail-badges", "detail-fields", "detail-memo",
  "photo-gallery", "camera-input", "gallery-input", "pdf-list", "pdf-input",
+ "pdf-search-btn", "pdf-url-form", "pdf-url-input",
  "lightbox", "lightbox-img", "lightbox-close",
 ].forEach((id) => { els[id] = document.getElementById(id); });
 
@@ -72,6 +73,9 @@ function bindEvents() {
   els["camera-input"].addEventListener("change", (e) => onFilesSelected(e, "photo"));
   els["gallery-input"].addEventListener("change", (e) => onFilesSelected(e, "photo"));
   els["pdf-input"].addEventListener("change", (e) => onFilesSelected(e, "pdf"));
+
+  els["pdf-search-btn"].addEventListener("click", onSearchPdf);
+  els["pdf-url-form"].addEventListener("submit", onImportPdfFromUrl);
 
   els["photo-gallery"].addEventListener("click", (e) => {
     const removeBtn = e.target.closest(".remove-btn");
@@ -276,6 +280,53 @@ async function onFilesSelected(e, kind) {
   state._detailItem = item;
   renderDetail(item);
   loadItems();
+}
+
+function onSearchPdf() {
+  const item = state._detailItem;
+  if (!item) return;
+  const maker = (item.maker || "").trim();
+  const model = (item.modelNumber || "").trim();
+  const subject = [maker, model].filter(Boolean).join(" ") || item.name;
+  const query = `${subject} 取扱説明書 PDF`;
+  window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, "_blank", "noopener");
+}
+
+async function onImportPdfFromUrl(e) {
+  e.preventDefault();
+  const url = els["pdf-url-input"].value.trim();
+  if (!url || !state.detailId) return;
+  const btn = els["pdf-url-form"].querySelector("button[type=submit]");
+  btn.disabled = true;
+  btn.textContent = "取得中…";
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`ダウンロードに失敗しました (${res.status})`);
+    const blob = await res.blob();
+    const head = await blob.slice(0, 5).text();
+    if (!head.startsWith("%PDF")) throw new Error("PDFファイルではないようです");
+
+    let filename = "manual.pdf";
+    try {
+      const last = new URL(url).pathname.split("/").filter(Boolean).pop();
+      if (last) filename = decodeURIComponent(last);
+    } catch { /* URL解析に失敗した場合は既定のファイル名を使う */ }
+    if (!filename.toLowerCase().endsWith(".pdf")) filename += ".pdf";
+
+    const file = new File([blob], filename, { type: "application/pdf" });
+    await store.addFile(state.detailId, "pdf", file);
+    els["pdf-url-input"].value = "";
+    const item = await store.getItem(state.detailId);
+    state._detailItem = item;
+    renderDetail(item);
+    loadItems();
+    showToast("PDFを取り込みました");
+  } catch {
+    showToast("自動取得できませんでした。リンク先でPDFをダウンロードし「PDFを追加」から選んでください。");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "取り込む";
+  }
 }
 
 async function onRemoveFile(fileId) {

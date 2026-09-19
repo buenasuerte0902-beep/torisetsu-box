@@ -118,11 +118,18 @@
         <h3>PDF説明書</h3>
         <ul id="pdf-list" class="pdf-list"></ul>
         <div class="upload-row">
+          <button type="button" id="pdf-search-btn" class="upload-btn">🔍 ネットでPDFを検索</button>
           <label class="upload-btn">
             📄 PDFを追加
             <input id="pdf-input" type="file" accept="application/pdf" multiple hidden>
           </label>
         </div>
+        <form id="pdf-url-form" class="url-import-row">
+          <input id="pdf-url-input" type="url" placeholder="見つけたPDFのURLを貼り付け" inputmode="url">
+          <button type="submit" class="upload-btn">取り込む</button>
+        </form>
+        <p class="hint">※メーカーサイトによっては自動取得できないことがあります。その場合は
+          リンク先でPDFをダウンロードし、「PDFを追加」から選んでください。</p>
       </section>
     </div>
   </div>

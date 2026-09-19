@@ -258,6 +258,10 @@ button { cursor: pointer; }
 }
 .upload-btn:active { background: #eef1ee; }
 
+.url-import-row { display: flex; gap: 8px; margin-top: 8px; }
+.url-import-row input { flex: 1; }
+.hint { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+
 /* ---------- lightbox ---------- */
 .lightbox {
   position: fixed; inset: 0; background: rgba(0,0,0,.9);
