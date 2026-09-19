@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f6f4f">
+<title>取説BOX</title>
+<meta name="description" content="家電・家具の説明書を写真とPDFでまとめて保管するアプリ">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<div id="login-screen" class="screen" hidden>
+  <div class="login-card">
+    <h1>取説BOX</h1>
+    <p class="muted">家電・家具の説明書を1か所にまとめて保管します</p>
+    <form id="login-form">
+      <label for="login-password">パスワード</label>
+      <input id="login-password" type="password" autocomplete="current-password" required>
+      <button type="submit" class="primary-btn">開く</button>
+      <p id="login-error" class="error-text" hidden></p>
+    </form>
+  </div>
+</div>
+
+<div id="app-screen" class="screen" hidden>
+  <header class="topbar">
+    <h1>取説BOX</h1>
+    <button id="logout-btn" class="icon-btn" title="ログアウト" aria-label="ログアウト">⎋</button>
+  </header>
+
+  <div class="toolbar">
+    <input id="search-input" type="search" placeholder="名前・メーカー・型番で検索" aria-label="検索">
+  </div>
+  <div id="category-chips" class="chips" role="tablist" aria-label="カテゴリで絞り込み"></div>
+
+  <main id="item-list" class="item-grid" aria-live="polite"></main>
+  <p id="empty-message" class="empty-message" hidden>まだ説明書が登録されていません。右下の＋から追加しましょう。</p>
+
+  <button id="add-btn" class="fab" title="追加" aria-label="説明書を追加">＋</button>
+</div>
+
+<div id="form-overlay" class="overlay" hidden>
+  <div class="sheet">
+    <div class="sheet-header">
+      <h2 id="form-title">説明書を追加</h2>
+      <button class="icon-btn" data-close="form-overlay" aria-label="閉じる">✕</button>
+    </div>
+    <form id="item-form">
+      <label for="f-name">名前 *</label>
+      <input id="f-name" name="name" required placeholder="例: 冷蔵庫 / ソファ">
+
+      <label for="f-category">カテゴリ</label>
+      <input id="f-category" name="category" list="category-options" placeholder="家電">
+      <datalist id="category-options"></datalist>
+
+      <div class="field-row">
+        <div>
+          <label for="f-maker">メーカー</label>
+          <input id="f-maker" name="maker">
+        </div>
+        <div>
+          <label for="f-model">型番</label>
+          <input id="f-model" name="modelNumber">
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div>
+          <label for="f-purchase">購入日</label>
+          <input id="f-purchase" name="purchaseDate" type="date">
+        </div>
+        <div>
+          <label for="f-warranty">保証期限</label>
+          <input id="f-warranty" name="warrantyExpiry" type="date">
+        </div>
+      </div>
+
+      <label for="f-memo">メモ</label>
+      <textarea id="f-memo" name="memo" rows="3" placeholder="トラブル対応・置き場所・保証書の場所など"></textarea>
+
+      <p id="form-error" class="error-text" hidden></p>
+      <button type="submit" class="primary-btn">保存する</button>
+    </form>
+  </div>
+</div>
+
+<div id="detail-overlay" class="overlay" hidden>
+  <div class="sheet sheet-full">
+    <div class="sheet-header">
+      <h2 id="detail-name">-</h2>
+      <div class="sheet-header-actions">
+        <button id="detail-edit-btn" class="icon-btn" aria-label="編集">✎</button>
+        <button id="detail-delete-btn" class="icon-btn" aria-label="削除">🗑</button>
+        <button class="icon-btn" data-close="detail-overlay" aria-label="閉じる">✕</button>
+      </div>
+    </div>
+    <div class="detail-body">
+      <div id="detail-badges" class="badges"></div>
+      <dl id="detail-fields" class="detail-fields"></dl>
+      <p id="detail-memo" class="detail-memo"></p>
+
+      <section>
+        <h3>写真</h3>
+        <div id="photo-gallery" class="photo-gallery"></div>
+        <div class="upload-row">
+          <label class="upload-btn">
+            📷 写真を撮る
+            <input id="camera-input" type="file" accept="image/*" capture="environment" hidden>
+          </label>
+          <label class="upload-btn">
+            🖼 写真を選ぶ
+            <input id="gallery-input" type="file" accept="image/*" multiple hidden>
+          </label>
+        </div>
+      </section>
+
+      <section>
+        <h3>PDF説明書</h3>
+        <ul id="pdf-list" class="pdf-list"></ul>
+        <div class="upload-row">
+          <label class="upload-btn">
+            📄 PDFを追加
+            <input id="pdf-input" type="file" accept="application/pdf" multiple hidden>
+          </label>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div id="lightbox" class="lightbox" hidden>
+  <button id="lightbox-close" class="icon-btn lightbox-close" aria-label="閉じる">✕</button>
+  <img id="lightbox-img" alt="">
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
