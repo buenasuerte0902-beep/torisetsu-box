@@ -2,6 +2,7 @@ import { store } from "./db.js";
 import { exportToFile, importFromFile } from "./export.js";
 import { warrantyStatus, escapeHtml, showToast } from "./util.js";
 import { compressPhoto, scaledObjectUrl } from "./image.js";
+import { extractPdfText } from "./pdftext.js";
 
 const els = {};
 ["app-screen", "export-btn", "import-input",
@@ -279,6 +280,17 @@ async function renderDetail(item) {
         <button type="button" class="remove-btn" data-file-id="${f.id}" aria-label="削除">🗑</button>
       </li>`;
   }).join("") || `<li class="muted">まだPDFがありません</li>`;
+
+  backfillPdfText(pdfs);
+}
+
+// このPDF検索機能より前に保存されたPDFにはtextフィールドが無いので、
+// 開いたついでにバックグラウンドで抽出して以後の全文検索に使えるようにする
+function backfillPdfText(pdfs) {
+  for (const f of pdfs) {
+    if (f.text !== undefined) continue;
+    extractPdfText(f.blob).then((text) => store.updateFileText(f.id, text)).catch(() => {});
+  }
 }
 
 async function onFilesSelected(e, kind) {
@@ -288,7 +300,8 @@ async function onFilesSelected(e, kind) {
   for (const file of files) {
     try {
       const toStore = kind === "photo" ? await compressPhoto(file) : file;
-      await store.addFile(state.detailId, kind, toStore);
+      const text = kind === "pdf" ? await extractPdfText(toStore) : undefined;
+      await store.addFile(state.detailId, kind, toStore, { text });
     } catch (err) {
       showToast(err.message);
     }
@@ -331,7 +344,8 @@ async function onImportPdfFromUrl(e) {
     if (!filename.toLowerCase().endsWith(".pdf")) filename += ".pdf";
 
     const file = new File([blob], filename, { type: "application/pdf" });
-    await store.addFile(state.detailId, "pdf", file);
+    const text = await extractPdfText(file);
+    await store.addFile(state.detailId, "pdf", file, { text });
     els["pdf-url-input"].value = "";
     const item = await store.getItem(state.detailId);
     state._detailItem = item;

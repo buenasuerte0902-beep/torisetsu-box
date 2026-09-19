@@ -1,8 +1,9 @@
-const CACHE = "torisetsu-box-v5";
+const CACHE = "torisetsu-box-v6";
 const SHELL = [
   "./", "index.html", "manifest.json",
   "css/app.css",
-  "js/app.js", "js/db.js", "js/export.js", "js/util.js", "js/image.js",
+  "js/app.js", "js/db.js", "js/export.js", "js/util.js", "js/image.js", "js/pdftext.js",
+  "vendor/pdfjs/pdf.min.mjs", "vendor/pdfjs/pdf.worker.min.mjs",
   "icons/icon-192.png", "icons/icon-512.png",
 ];
 

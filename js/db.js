@@ -40,22 +40,27 @@ export const store = {
   async listItems({ q, category } = {}) {
     const db = await openDb();
     const all = await reqToPromise(tx(db, ["items"], "readonly").objectStore("items").getAll());
-    let items = all;
-    if (category) items = items.filter((i) => i.category === category);
-    if (q) {
-      const needle = q.toLowerCase();
-      items = items.filter((i) =>
-        [i.name, i.maker, i.modelNumber, i.memo].some((v) => (v || "").toLowerCase().includes(needle))
-      );
-    }
-    items.sort((a, b) => b.updatedAt - a.updatedAt);
-
     const allFiles = await reqToPromise(tx(db, ["files"], "readonly").objectStore("files").getAll());
     const filesByItem = new Map();
     for (const f of allFiles) {
       if (!filesByItem.has(f.itemId)) filesByItem.set(f.itemId, []);
       filesByItem.get(f.itemId).push(f);
     }
+
+    let items = all;
+    if (category) items = items.filter((i) => i.category === category);
+    if (q) {
+      const needle = q.toLowerCase();
+      items = items.filter((i) => {
+        const metaMatch = [i.name, i.maker, i.modelNumber, i.memo]
+          .some((v) => (v || "").toLowerCase().includes(needle));
+        if (metaMatch) return true;
+        const files = filesByItem.get(i.id) || [];
+        return files.some((f) => f.kind === "pdf" && (f.text || "").toLowerCase().includes(needle));
+      });
+    }
+    items.sort((a, b) => b.updatedAt - a.updatedAt);
+
     const categories = [...new Set(["家電", "家具", "その他", ...all.map((i) => i.category)])].sort();
 
     return {
@@ -120,7 +125,7 @@ export const store = {
     });
   },
 
-  async addFile(itemId, kind, file) {
+  async addFile(itemId, kind, file, { text } = {}) {
     const db = await openDb();
     const record = {
       id: newId(),
@@ -130,6 +135,7 @@ export const store = {
       originalName: file.name || "",
       mime: file.type || "",
       uploadedAt: Date.now(),
+      text: text ?? null, // PDF全文検索用に抽出したテキスト。未抽出/写真ならnull
     };
     const t = tx(db, ["files", "items"], "readwrite");
     t.objectStore("files").add(record);
@@ -145,6 +151,18 @@ export const store = {
   async deleteFile(id) {
     const db = await openDb();
     await reqToPromise(tx(db, ["files"], "readwrite").objectStore("files").delete(id));
+  },
+
+  // 古いバージョンで保存されたPDF(textフィールドが無い)に、後から抽出したテキストを付ける
+  async updateFileText(id, text) {
+    const db = await openDb();
+    const t = tx(db, ["files"], "readwrite");
+    const rec = await reqToPromise(t.objectStore("files").get(id));
+    if (rec) t.objectStore("files").put({ ...rec, text });
+    await new Promise((resolve, reject) => {
+      t.oncomplete = resolve;
+      t.onerror = () => reject(t.error);
+    });
   },
 
   async exportAll() {
