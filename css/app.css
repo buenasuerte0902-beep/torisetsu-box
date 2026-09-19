@@ -36,27 +36,6 @@ h1, h2, h3 { margin: 0; }
 
 .muted { color: var(--muted); }
 
-/* ---------- login ---------- */
-#login-screen {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-.login-card {
-  width: 100%;
-  max-width: 360px;
-  background: var(--card-bg);
-  border-radius: var(--radius);
-  padding: 28px 24px;
-  box-shadow: 0 4px 24px rgba(0,0,0,.08);
-  text-align: center;
-}
-.login-card h1 { color: var(--green-dark); font-size: 26px; margin-bottom: 6px; }
-.login-card p { margin: 0 0 20px; }
-.login-card form { display: flex; flex-direction: column; gap: 10px; text-align: left; }
-.login-card label { font-size: 13px; color: var(--muted); }
-
 input, select, textarea, button {
   font: inherit;
 }
@@ -107,6 +86,7 @@ button { cursor: pointer; }
   z-index: 5;
 }
 .topbar h1 { font-size: 20px; color: var(--green-dark); }
+.topbar-actions { display: flex; align-items: center; gap: 2px; }
 
 .toolbar { padding: 6px 16px; }
 

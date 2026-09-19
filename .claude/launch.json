@@ -2,9 +2,9 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "torisetsu-box-server",
+      "name": "torisetsu-box",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["server/app.py"],
+      "runtimeArgs": ["serve.py"],
       "port": 8790,
       "autoPort": true
     }

@@ -1,8 +1,4 @@
 __pycache__/
 *.pyc
-.venv/
-venv/
 .certs/
-data/app.db
-data/uploads/
 .DS_Store

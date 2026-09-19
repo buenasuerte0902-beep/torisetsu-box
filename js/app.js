@@ -1,8 +1,9 @@
-import { api } from "./api.js";
+import { store } from "./db.js";
+import { exportToFile, importFromFile } from "./export.js";
 import { warrantyStatus, escapeHtml, showToast } from "./util.js";
 
 const els = {};
-["login-screen", "app-screen", "login-form", "login-password", "login-error", "logout-btn",
+["app-screen", "export-btn", "import-input",
  "search-input", "category-chips", "item-list", "empty-message", "add-btn",
  "form-overlay", "form-title", "item-form", "form-error",
  "f-name", "f-category", "f-maker", "f-model", "f-purchase", "f-warranty", "f-memo",
@@ -23,50 +24,23 @@ const state = {
 };
 
 let searchDebounce;
+let gridObjectUrls = [];
+let detailObjectUrls = [];
+
+function revoke(urls) {
+  urls.forEach((u) => URL.revokeObjectURL(u));
+  urls.length = 0;
+}
 
 async function init() {
   if (navigator.serviceWorker) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
   }
-  try {
-    const { loggedIn } = await api.session();
-    if (loggedIn) showApp(); else showLogin();
-  } catch {
-    showLogin();
-  }
   bindEvents();
-}
-
-function showLogin() {
-  els["login-screen"].hidden = false;
-  els["app-screen"].hidden = true;
-}
-
-function showApp() {
-  els["login-screen"].hidden = true;
-  els["app-screen"].hidden = false;
   loadItems();
 }
 
 function bindEvents() {
-  els["login-form"].addEventListener("submit", async (e) => {
-    e.preventDefault();
-    els["login-error"].hidden = true;
-    try {
-      await api.login(els["login-password"].value);
-      els["login-password"].value = "";
-      showApp();
-    } catch (err) {
-      els["login-error"].textContent = err.message;
-      els["login-error"].hidden = false;
-    }
-  });
-
-  els["logout-btn"].addEventListener("click", async () => {
-    await api.logout();
-    showLogin();
-  });
-
   els["search-input"].addEventListener("input", () => {
     clearTimeout(searchDebounce);
     searchDebounce = setTimeout(() => {
@@ -112,18 +86,36 @@ function bindEvents() {
 
   els["lightbox-close"].addEventListener("click", () => { els.lightbox.hidden = true; });
   els.lightbox.addEventListener("click", (e) => { if (e.target === els.lightbox) els.lightbox.hidden = true; });
+
+  els["export-btn"].addEventListener("click", async () => {
+    try {
+      const { itemCount } = await exportToFile();
+      showToast(`${itemCount}件を書き出しました`);
+    } catch (err) {
+      showToast(err.message);
+    }
+  });
+
+  els["import-input"].addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const { importedItems } = await importFromFile(file);
+      showToast(`${importedItems}件を読み込みました`);
+      loadItems();
+    } catch (err) {
+      showToast(err.message);
+    }
+  });
 }
 
 async function loadItems() {
-  try {
-    const { items, categories } = await api.listItems({ q: state.q, category: state.category });
-    state.items = items;
-    state.categories = categories;
-    renderChips();
-    renderGrid();
-  } catch (err) {
-    showToast(err.message);
-  }
+  const { items, categories } = await store.listItems({ q: state.q, category: state.category });
+  state.items = items;
+  state.categories = categories;
+  renderChips();
+  renderGrid();
 }
 
 function renderChips() {
@@ -144,12 +136,18 @@ function renderChips() {
 }
 
 function renderGrid() {
+  revoke(gridObjectUrls);
   els["empty-message"].hidden = state.items.length > 0;
   els["item-list"].innerHTML = state.items.map((item) => {
     const status = warrantyStatus(item.warrantyExpiry);
-    const thumb = item.thumbnail
-      ? `<div class="thumb" style="background-image:url('/uploads/${encodeURIComponent(item.thumbnail)}')"></div>`
-      : `<div class="thumb">${item.fileCount > 0 ? "📄" : "📦"}</div>`;
+    let thumb;
+    if (item.thumbnailBlob) {
+      const url = URL.createObjectURL(item.thumbnailBlob);
+      gridObjectUrls.push(url);
+      thumb = `<div class="thumb" style="background-image:url('${url}')"></div>`;
+    } else {
+      thumb = `<div class="thumb">${item.fileCount > 0 ? "📄" : "📦"}</div>`;
+    }
     return `
       <button type="button" class="item-card" data-id="${item.id}">
         ${thumb}
@@ -192,12 +190,17 @@ async function onSubmitForm(e) {
     warrantyExpiry: els["f-warranty"].value || null,
     memo: els["f-memo"].value.trim(),
   };
+  if (!payload.name) {
+    els["form-error"].textContent = "名前は必須です";
+    els["form-error"].hidden = false;
+    return;
+  }
   try {
     let item;
     if (state.editingId) {
-      item = await api.updateItem(state.editingId, payload);
+      item = await store.updateItem(state.editingId, payload);
     } else {
-      item = await api.createItem(payload);
+      item = await store.createItem(payload);
     }
     els["form-overlay"].hidden = true;
     await loadItems();
@@ -209,18 +212,16 @@ async function onSubmitForm(e) {
 }
 
 async function openDetail(id) {
-  try {
-    const item = await api.getItem(id);
-    state.detailId = id;
-    state._detailItem = item;
-    renderDetail(item);
-    els["detail-overlay"].hidden = false;
-  } catch (err) {
-    showToast(err.message);
-  }
+  const item = await store.getItem(id);
+  if (!item) { showToast("見つかりません"); return; }
+  state.detailId = id;
+  state._detailItem = item;
+  renderDetail(item);
+  els["detail-overlay"].hidden = false;
 }
 
 function renderDetail(item) {
+  revoke(detailObjectUrls);
   els["detail-name"].textContent = item.name;
 
   const status = warrantyStatus(item.warrantyExpiry);
@@ -238,18 +239,26 @@ function renderDetail(item) {
   els["detail-memo"].textContent = item.memo || "";
 
   const photos = item.files.filter((f) => f.kind === "photo");
-  els["photo-gallery"].innerHTML = photos.map((f) => `
-    <div class="photo-item">
-      <img src="${f.url}" alt="">
-      <button type="button" class="remove-btn" data-file-id="${f.id}" aria-label="削除">✕</button>
-    </div>`).join("");
+  els["photo-gallery"].innerHTML = photos.map((f) => {
+    const url = URL.createObjectURL(f.blob);
+    detailObjectUrls.push(url);
+    return `
+      <div class="photo-item">
+        <img src="${url}" alt="">
+        <button type="button" class="remove-btn" data-file-id="${f.id}" aria-label="削除">✕</button>
+      </div>`;
+  }).join("");
 
   const pdfs = item.files.filter((f) => f.kind === "pdf");
-  els["pdf-list"].innerHTML = pdfs.map((f) => `
-    <li>
-      <a href="${f.url}" target="_blank" rel="noopener">${escapeHtml(f.originalName || "PDF")}</a>
-      <button type="button" class="remove-btn" data-file-id="${f.id}" aria-label="削除">🗑</button>
-    </li>`).join("") || `<li class="muted">まだPDFがありません</li>`;
+  els["pdf-list"].innerHTML = pdfs.map((f) => {
+    const url = URL.createObjectURL(f.blob);
+    detailObjectUrls.push(url);
+    return `
+      <li>
+        <a href="${url}" target="_blank" rel="noopener">${escapeHtml(f.originalName || "PDF")}</a>
+        <button type="button" class="remove-btn" data-file-id="${f.id}" aria-label="削除">🗑</button>
+      </li>`;
+  }).join("") || `<li class="muted">まだPDFがありません</li>`;
 }
 
 async function onFilesSelected(e, kind) {
@@ -258,12 +267,12 @@ async function onFilesSelected(e, kind) {
   if (!files.length || !state.detailId) return;
   for (const file of files) {
     try {
-      await api.uploadFile(state.detailId, kind, file);
+      await store.addFile(state.detailId, kind, file);
     } catch (err) {
       showToast(err.message);
     }
   }
-  const item = await api.getItem(state.detailId);
+  const item = await store.getItem(state.detailId);
   state._detailItem = item;
   renderDetail(item);
   loadItems();
@@ -271,26 +280,18 @@ async function onFilesSelected(e, kind) {
 
 async function onRemoveFile(fileId) {
   if (!confirm("この写真/PDFを削除しますか？")) return;
-  try {
-    await api.deleteFile(fileId);
-    const item = await api.getItem(state.detailId);
-    state._detailItem = item;
-    renderDetail(item);
-    loadItems();
-  } catch (err) {
-    showToast(err.message);
-  }
+  await store.deleteFile(fileId);
+  const item = await store.getItem(state.detailId);
+  state._detailItem = item;
+  renderDetail(item);
+  loadItems();
 }
 
 async function onDeleteItem() {
   if (!confirm("この説明書を削除しますか？写真・PDFもすべて削除されます。")) return;
-  try {
-    await api.deleteItem(state.detailId);
-    els["detail-overlay"].hidden = true;
-    loadItems();
-  } catch (err) {
-    showToast(err.message);
-  }
+  await store.deleteItem(state.detailId);
+  els["detail-overlay"].hidden = true;
+  loadItems();
 }
 
 function openLightbox(src) {

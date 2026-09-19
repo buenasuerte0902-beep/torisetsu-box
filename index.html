@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2f6f4f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>取説BOX</title>
 <meta name="description" content="家電・家具の説明書を写真とPDFでまとめて保管するアプリ">
 <link rel="manifest" href="manifest.json">
@@ -13,23 +16,16 @@
 </head>
 <body>
 
-<div id="login-screen" class="screen" hidden>
-  <div class="login-card">
-    <h1>取説BOX</h1>
-    <p class="muted">家電・家具の説明書を1か所にまとめて保管します</p>
-    <form id="login-form">
-      <label for="login-password">パスワード</label>
-      <input id="login-password" type="password" autocomplete="current-password" required>
-      <button type="submit" class="primary-btn">開く</button>
-      <p id="login-error" class="error-text" hidden></p>
-    </form>
-  </div>
-</div>
-
-<div id="app-screen" class="screen" hidden>
+<div id="app-screen" class="screen">
   <header class="topbar">
     <h1>取説BOX</h1>
-    <button id="logout-btn" class="icon-btn" title="ログアウト" aria-label="ログアウト">⎋</button>
+    <div class="topbar-actions">
+      <label class="icon-btn" title="読み込み(インポート)" aria-label="読み込み">
+        📥
+        <input id="import-input" type="file" accept="application/json" hidden>
+      </label>
+      <button id="export-btn" class="icon-btn" title="書き出し(エクスポート)" aria-label="書き出し">📤</button>
+    </div>
   </header>
 
   <div class="toolbar">
