@@ -1,6 +1,7 @@
 import { store } from "./db.js";
 import { exportToFile, importFromFile } from "./export.js";
 import { warrantyStatus, escapeHtml, showToast } from "./util.js";
+import { compressPhoto, scaledObjectUrl } from "./image.js";
 
 const els = {};
 ["app-screen", "export-btn", "import-input",
@@ -27,6 +28,7 @@ const state = {
 let searchDebounce;
 let gridObjectUrls = [];
 let detailObjectUrls = [];
+let lightboxObjectUrl = null;
 
 function revoke(urls) {
   urls.forEach((u) => URL.revokeObjectURL(u));
@@ -59,8 +61,17 @@ function bindEvents() {
   els["item-form"].addEventListener("submit", onSubmitForm);
 
   els["item-list"].addEventListener("click", (e) => {
+    const quickDelete = e.target.closest(".quick-delete-btn");
+    if (quickDelete) { onQuickDeleteItem(quickDelete.dataset.id); return; }
     const card = e.target.closest(".item-card");
     if (card) openDetail(card.dataset.id);
+  });
+  els["item-list"].addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const card = e.target.closest(".item-card");
+    if (!card) return;
+    e.preventDefault();
+    openDetail(card.dataset.id);
   });
 
   els["detail-edit-btn"].addEventListener("click", () => {
@@ -81,15 +92,15 @@ function bindEvents() {
     const removeBtn = e.target.closest(".remove-btn");
     if (removeBtn) { onRemoveFile(removeBtn.dataset.fileId); return; }
     const photo = e.target.closest(".photo-item img");
-    if (photo) openLightbox(photo.src);
+    if (photo) openLightbox(photo.dataset.fileId);
   });
   els["pdf-list"].addEventListener("click", (e) => {
     const removeBtn = e.target.closest(".remove-btn");
     if (removeBtn) onRemoveFile(removeBtn.dataset.fileId);
   });
 
-  els["lightbox-close"].addEventListener("click", () => { els.lightbox.hidden = true; });
-  els.lightbox.addEventListener("click", (e) => { if (e.target === els.lightbox) els.lightbox.hidden = true; });
+  els["lightbox-close"].addEventListener("click", closeLightbox);
+  els.lightbox.addEventListener("click", (e) => { if (e.target === els.lightbox) closeLightbox(); });
 
   els["export-btn"].addEventListener("click", async () => {
     try {
@@ -139,21 +150,26 @@ function renderChips() {
     .map((c) => `<option value="${escapeHtml(c)}">`).join("");
 }
 
-function renderGrid() {
+async function renderGrid() {
   revoke(gridObjectUrls);
-  els["empty-message"].hidden = state.items.length > 0;
-  els["item-list"].innerHTML = state.items.map((item) => {
+  const items = state.items;
+  els["empty-message"].hidden = items.length > 0;
+
+  // サムネイルは一覧表示用に小さく縮小してから使う(スマホカメラのフル解像度画像を
+  // そのままCSS背景に使うとデコード負荷が大きく、クラッシュの一因になるため)
+  const thumbUrls = await Promise.all(
+    items.map((item) => (item.thumbnailBlob ? scaledObjectUrl(item.thumbnailBlob, 300) : null))
+  );
+  gridObjectUrls.push(...thumbUrls.filter(Boolean));
+
+  els["item-list"].innerHTML = items.map((item, i) => {
     const status = warrantyStatus(item.warrantyExpiry);
-    let thumb;
-    if (item.thumbnailBlob) {
-      const url = URL.createObjectURL(item.thumbnailBlob);
-      gridObjectUrls.push(url);
-      thumb = `<div class="thumb" style="background-image:url('${url}')"></div>`;
-    } else {
-      thumb = `<div class="thumb">${item.fileCount > 0 ? "📄" : "📦"}</div>`;
-    }
+    const thumb = thumbUrls[i]
+      ? `<div class="thumb" style="background-image:url('${thumbUrls[i]}')"></div>`
+      : `<div class="thumb">${item.fileCount > 0 ? "📄" : "📦"}</div>`;
     return `
-      <button type="button" class="item-card" data-id="${item.id}">
+      <div class="item-card" role="button" tabindex="0" data-id="${item.id}">
+        <button type="button" class="quick-delete-btn" data-id="${item.id}" aria-label="削除">🗑</button>
         ${thumb}
         <div class="info">
           <div class="name">${escapeHtml(item.name)}</div>
@@ -161,7 +177,7 @@ function renderGrid() {
           <span class="badge category">${escapeHtml(item.category)}</span>
           ${status ? `<span class="badge ${status.level}">${escapeHtml(status.label)}</span>` : ""}
         </div>
-      </button>`;
+      </div>`;
   }).join("");
 }
 
@@ -224,7 +240,7 @@ async function openDetail(id) {
   els["detail-overlay"].hidden = false;
 }
 
-function renderDetail(item) {
+async function renderDetail(item) {
   revoke(detailObjectUrls);
   els["detail-name"].textContent = item.name;
 
@@ -242,16 +258,16 @@ function renderDetail(item) {
 
   els["detail-memo"].textContent = item.memo || "";
 
+  // ギャラリーは縮小版で表示し、タップ時にオリジナルを読み込む(フル解像度を
+  // 何枚も同時デコードするとモバイルSafariでクラッシュすることがあるため)
   const photos = item.files.filter((f) => f.kind === "photo");
-  els["photo-gallery"].innerHTML = photos.map((f) => {
-    const url = URL.createObjectURL(f.blob);
-    detailObjectUrls.push(url);
-    return `
+  const photoUrls = await Promise.all(photos.map((f) => scaledObjectUrl(f.blob, 480)));
+  detailObjectUrls.push(...photoUrls);
+  els["photo-gallery"].innerHTML = photos.map((f, i) => `
       <div class="photo-item">
-        <img src="${url}" alt="">
+        <img src="${photoUrls[i]}" alt="" data-file-id="${f.id}">
         <button type="button" class="remove-btn" data-file-id="${f.id}" aria-label="削除">✕</button>
-      </div>`;
-  }).join("");
+      </div>`).join("");
 
   const pdfs = item.files.filter((f) => f.kind === "pdf");
   els["pdf-list"].innerHTML = pdfs.map((f) => {
@@ -271,7 +287,8 @@ async function onFilesSelected(e, kind) {
   if (!files.length || !state.detailId) return;
   for (const file of files) {
     try {
-      await store.addFile(state.detailId, kind, file);
+      const toStore = kind === "photo" ? await compressPhoto(file) : file;
+      await store.addFile(state.detailId, kind, toStore);
     } catch (err) {
       showToast(err.message);
     }
@@ -345,9 +362,28 @@ async function onDeleteItem() {
   loadItems();
 }
 
-function openLightbox(src) {
-  els["lightbox-img"].src = src;
+// 一覧カードから直接削除する(詳細画面を開けない場合の逃げ道)
+async function onQuickDeleteItem(id) {
+  if (!confirm("この説明書を削除しますか？写真・PDFもすべて削除されます。")) return;
+  await store.deleteItem(id);
+  loadItems();
+}
+
+function openLightbox(fileId) {
+  const file = (state._detailItem?.files || []).find((f) => f.id === fileId);
+  if (!file) return;
+  closeLightbox();
+  lightboxObjectUrl = URL.createObjectURL(file.blob);
+  els["lightbox-img"].src = lightboxObjectUrl;
   els.lightbox.hidden = false;
+}
+
+function closeLightbox() {
+  els.lightbox.hidden = true;
+  if (lightboxObjectUrl) {
+    URL.revokeObjectURL(lightboxObjectUrl);
+    lightboxObjectUrl = null;
+  }
 }
 
 init();

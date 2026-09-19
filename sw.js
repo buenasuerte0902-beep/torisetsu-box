@@ -1,8 +1,8 @@
-const CACHE = "torisetsu-box-v4";
+const CACHE = "torisetsu-box-v5";
 const SHELL = [
   "./", "index.html", "manifest.json",
   "css/app.css",
-  "js/app.js", "js/db.js", "js/export.js", "js/util.js",
+  "js/app.js", "js/db.js", "js/export.js", "js/util.js", "js/image.js",
   "icons/icon-192.png", "icons/icon-512.png",
 ];
 
